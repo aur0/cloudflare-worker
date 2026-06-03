@@ -28,6 +28,8 @@ type ServerEvent =
   | { type: 'presence_updated'; threadId: number }
   | { type: 'error'; message: string };
 
+const inboxRoomId = 'site_inbox';
+
 const allowedEventTypes = new Set([
   'thread_updated',
   'threads_updated',
@@ -116,7 +118,7 @@ function isSignedSession(value: unknown): value is SignedSession {
     typeof maybeSession.roomId === 'string' &&
     maybeSession.roomId.length > 0 &&
     Number.isFinite(maybeSession.threadId) &&
-    maybeSession.threadId! > 0 &&
+    maybeSession.threadId! >= 0 &&
     (maybeSession.role === 'customer' || maybeSession.role === 'agent') &&
     Number.isFinite(maybeSession.exp)
   );
@@ -232,6 +234,18 @@ export class SupportRoom implements DurableObject {
   ) {}
 
   async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (request.method === 'POST' && url.pathname === '/internal-broadcast') {
+      const event = (await request.json().catch(() => null)) as ServerEvent | null;
+      if (!event || typeof event.type !== 'string') {
+        return json({ error: 'Invalid broadcast event.' }, 400);
+      }
+
+      this.broadcast(event);
+      return json({ ok: true });
+    }
+
     if (request.headers.get('Upgrade') !== 'websocket') {
       return json({ error: 'Expected websocket Upgrade request.' }, 426);
     }
@@ -252,13 +266,15 @@ export class SupportRoom implements DurableObject {
       role: session.role,
     });
 
-    this.broadcast(
-      {
-        type: 'presence_updated',
-        threadId: session.threadId,
-      },
-      server
-    );
+    if (session.roomId !== inboxRoomId) {
+      this.broadcast(
+        {
+          type: 'presence_updated',
+          threadId: session.threadId,
+        },
+        server
+      );
+    }
 
     return new Response(null, {
       status: 101,
@@ -286,14 +302,15 @@ export class SupportRoom implements DurableObject {
       return;
     }
 
-    const threadId = event.threadId || session.threadId;
-    if (threadId !== session.threadId) {
+    const threadId = event.threadId ?? session.threadId;
+    if (session.roomId !== inboxRoomId && threadId !== session.threadId) {
       sendSocket(socket, { type: 'error', message: 'Thread does not match room session.' });
       return;
     }
 
     if (event.type === 'threads_updated') {
       this.broadcast({ type: 'threads_updated', threadId }, socket);
+      await this.broadcastToInbox(session, { type: 'threads_updated', threadId });
       return;
     }
 
@@ -308,6 +325,7 @@ export class SupportRoom implements DurableObject {
     }
 
     this.broadcast({ type: 'thread_updated', threadId }, socket);
+    await this.broadcastToInbox(session, { type: 'threads_updated', threadId });
   }
 
   async webSocketClose(socket: WebSocket): Promise<void> {
@@ -337,5 +355,22 @@ export class SupportRoom implements DurableObject {
 
       sendSocket(socket, event);
     }
+  }
+
+  private async broadcastToInbox(session: SignedSession, event: ServerEvent): Promise<void> {
+    if (session.roomId === inboxRoomId) {
+      return;
+    }
+
+    const objectId = this.env.SUPPORT_ROOM.idFromName(`${session.siteId}:${inboxRoomId}`);
+    const room = this.env.SUPPORT_ROOM.get(objectId);
+
+    await room.fetch('https://internal/internal-broadcast', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(event),
+    });
   }
 }
