@@ -44,6 +44,18 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+function healthJson(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET, OPTIONS',
+      'access-control-allow-headers': 'content-type',
+      'content-type': 'application/json; charset=UTF-8',
+    },
+  });
+}
+
 function base64UrlToBytes(value: string): Uint8Array {
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
   const binary = atob(base64);
@@ -177,8 +189,12 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.pathname === '/health' && request.method === 'OPTIONS') {
+      return healthJson(null, 204);
+    }
+
     if (url.pathname === '/health') {
-      return json({ ok: true, service: 'aiwp-support-chat-worker' });
+      return healthJson({ ok: true, service: 'aiwp-support-chat-worker' });
     }
 
     if (request.headers.get('Upgrade') !== 'websocket') {
