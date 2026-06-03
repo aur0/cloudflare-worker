@@ -58,6 +58,11 @@ function healthJson(data: unknown, status = 200): Response {
   });
 }
 
+async function secretFingerprint(secret: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
+  return bytesToBase64Url(digest).slice(0, 16);
+}
+
 function base64UrlToBytes(value: string): Uint8Array {
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
   const binary = atob(base64);
@@ -196,7 +201,13 @@ export default {
     }
 
     if (url.pathname === '/health') {
-      return healthJson({ ok: true, service: 'aiwp-support-chat-worker' });
+      return healthJson({
+        ok: true,
+        service: 'aiwp-support-chat-worker',
+        version: '2026-06-03-inbox-room',
+        hasSigningSecret: Boolean(env.AIWP_SIGNING_SECRET),
+        signingSecretFingerprint: env.AIWP_SIGNING_SECRET ? await secretFingerprint(env.AIWP_SIGNING_SECRET) : '',
+      });
     }
 
     if (request.headers.get('Upgrade') !== 'websocket') {
