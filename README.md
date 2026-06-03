@@ -48,7 +48,7 @@ npm run deploy
 Cloudflare can deploy this Worker from a public GitHub or GitLab repository:
 
 ```text
-https://deploy.workers.cloudflare.com/?url=https://github.com/your-org/your-repo/tree/main/cloudflare-worker
+https://deploy.workers.cloudflare.com/?url=https://github.com/aur0/cloudflare-worker
 ```
 
 The deploy flow reads `wrangler.toml`, provisions the Durable Object binding, and configures Workers Builds for future pushes.
@@ -56,7 +56,6 @@ The deploy flow reads `wrangler.toml`, provisions the Durable Object binding, an
 Requirements:
 
 - The repository must be public.
-- If using a subdirectory URL, this `cloudflare-worker` folder must be self-contained.
 - The deployer will still need to set `AIWP_SIGNING_SECRET` to match the WordPress plugin's signing secret.
 
 ## Websocket URL
