@@ -1,0 +1,18 @@
+name = "aiwp-support-chat"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+[durable_objects]
+bindings = [
+  { name = "SUPPORT_ROOM", class_name = "SupportRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SupportRoom"]
+
+# Set this as a secret in production:
+# wrangler secret put AIWP_SIGNING_SECRET
+#
+# For local dev only, create .dev.vars:
+# AIWP_SIGNING_SECRET="replace-with-the-wordpress-signing-secret"
