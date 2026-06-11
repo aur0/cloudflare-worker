@@ -269,7 +269,17 @@ export class SupportRoom implements DurableObject {
     const { client, server } = getWebSocketPair();
 
     server.serializeAttachment(session);
-    this.state.acceptWebSocket(server);
+    // Prefer hibernation WebSockets to reduce cost when rooms are idle.
+    // If the runtime doesn't support it, fall back to the standard API.
+    const anyState = this.state as unknown as {
+      acceptWebSocket?: (socket: WebSocket) => void;
+      acceptWebSocketHibernatable?: (socket: WebSocket) => void;
+    };
+    if (typeof anyState.acceptWebSocketHibernatable === 'function') {
+      anyState.acceptWebSocketHibernatable(server);
+    } else {
+      this.state.acceptWebSocket(server);
+    }
     sendSocket(server, {
       type: 'subscribed',
       roomId: session.roomId,
